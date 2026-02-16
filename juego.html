@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy 67 "el bodrio de juego"</title>
+    <style>
+        body {
+            background-color: #000000; /* Fondo oscuro tipo 67 */
+            color: #fff;
+            font-family: 'Arial Black', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            text-transform: uppercase;
+        }
+
+        #game-container {
+            width: 400px; /* Ancho del juego */
+            height: 600px; /* Alto del juego */
+            background-color: #000000; /* Fondo del área de juego */
+            border: 5px solid #092eff; /* Borde rojo tipo 67 */
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 0 30px rgba(61, 123, 255, 0.6);
+       }
+
+        #player {
+            position: absolute;
+            width: 50px; /* Ancho del pájaro */
+            height: 50px; /* Alto del pájaro */
+            background-image: url('https://www.indiatimes.com/thumb/123963169.cms?imgsize=46526&width=616&resizemode=4'); /* ¡AQUÍ VA LA URL DE TU IMAGEN DEL PÁJARO! */
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            top: 250px; /* Posición inicial */
+            left: 50px;
+            z-index: 10;
+        }
+        .pipe {
+            position: absolute;
+            width: 70px; /* Ancho de las tuberías */
+            background-color: #000000; /* Color de las tuberías */
+            border: 2px solid #001eff;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .top-pipe { top: 0; }
+        .bottom-pipe { bottom: 0; }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3rem;
+            color: #ff0000; /* Puntuación en rojo */
+            text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+            z-index: 20;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.8);
+            padding: 30px;
+            border: 3px solid #ff0000;
+            text-align: center;
+            font-size: 2rem;
+            display: none; /* Oculto al inicio */
+            z-index: 100;
+        }
+
+        #game-over button {
+            background-color: #8B0000;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            font-family: 'Arial Black', sans-serif;
+            margin-top: 20px;
+            transition: 0.3s;
+        }
+
+        #game-over button:hover {
+            background-color: #ff0000;
+            transform: scale(1.05);
+        }
+
+        #instructions {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            color: #bbb;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="player"></div>
+        <div id="score">0</div>
+        <div id="game-over">
+            Perdiste PENDEJO
+            <p>Puntuación: <span id="final-score">0</span></p>
+            <button onclick="startGame()">volver a jugar este bodrio 👀</button>
+        </div>
+    </div>
+
+    <p id="instructions">Hace click pa volar.</p>
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        const playerGravity = 0.5; // Gravedad que tira al jugador hacia abajo
+        const playerJumpStrength = -10; // Fuerza del salto del jugador
+        const pipeSpeed = -2; // Velocidad de las tuberías
+        const pipeGap = 200; // Espacio entre tuberías superior e inferior
+        const pipeWidth = 70; // Ancho de las tuberías
+        const spawnPipeInterval = 2000; // Cada cuánto tiempo aparecen nuevas tuberías (milisegundos)
+
+        let playerY = 250; // Posición Y inicial del jugador
+        let playerVelocity = 0; // Velocidad vertical del jugador
+        let score = 0;
+        let gameRunning = false;
+        let pipes = [];
+        let gameLoopId;
+        let pipeSpawnId;
+
+        // Función para cambiar la imagen del pájaro
+        function setPlayerImage(url) {
+            player.style.backgroundImage = `url('${url}')`;
+        }
+
+        // --- ¡¡¡AQUÍ PONES LA URL DE TU IMAGEN!!! ---
+        // Ejemplo: setPlayerImage('https://i.imgur.com/MiKx60Q.png'); // Un pájaro PNG
+        // Ejemplo: setPlayerImage('https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/67-svg.svg/1200px-67-svg.svg.png'); // El número 67
+        setPlayerImage('https://www.indiatimes.com/thumb/123963169.cms?imgsize=46526&width=616&resizemode=4'); // <-- ¡Cambia esto por tu URL!
+
+
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            scoreDisplay.textContent = score;
+            playerY = 250;
+            playerVelocity = 0;
+            pipes.forEach(pipe => pipe.element.remove()); // Elimina tuberías anteriores
+            pipes = [];
+            gameOverScreen.style.display = 'none';
+
+            player.style.top = `${playerY}px`;
+
+            gameLoopId = setInterval(gameLoop, 20); // Inicia el bucle principal del juego
+            pipeSpawnId = setInterval(spawnPipe, spawnPipeInterval); // Empieza a generar tuberías
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            // Actualizar posición del jugador
+            playerVelocity += playerGravity;
+            playerY += playerVelocity;
+            player.style.top = `${playerY}px`;
+
+            // Chequear si el jugador toca el techo o el suelo
+            if (playerY <= 0 || playerY + player.clientHeight >= gameContainer.clientHeight) {
+                endGame();
+                return;
+            }
+
+            // Mover y chequear tuberías
+            pipes.forEach(pipe => {
+                pipe.x += pipeSpeed;
+                pipe.element.style.left = `${pipe.x}px`;
+
+                // Eliminar tuberías fuera de pantalla
+                if (pipe.x + pipeWidth < 0) {
+                    pipe.element.remove();
+                    pipes = pipes.filter(p => p !== pipe);
+                }
+
+                // Chequear colisión con las tuberías
+                if (
+                    player.offsetLeft < pipe.x + pipeWidth &&
+                    player.offsetLeft + player.clientWidth > pipe.x &&
+                    (playerY < pipe.topHeight || playerY + player.clientHeight > gameContainer.clientHeight - pipe.bottomHeight)
+                ) {
+                    endGame();
+                    return;
+                }
+
+                // Incrementar puntuación si el jugador pasa la tubería
+                if (!pipe.passed && player.offsetLeft > pipe.x + pipeWidth) {
+                    score++;
+                    scoreDisplay.textContent = score;
+                    pipe.passed = true;
+                }
+            });
+        }
+
+        function spawnPipe() {
+            if (!gameRunning) return;
+
+            const minHeight = 50;
+            const maxHeight = gameContainer.clientHeight - pipeGap - minHeight;
+            const topPipeHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+            const bottomPipeHeight = gameContainer.clientHeight - topPipeHeight - pipeGap;
+
+            const pipeX = gameContainer.clientWidth;
+
+            // Tubería superior
+            const topPipe = document.createElement('div');
+            topPipe.classList.add('pipe', 'top-pipe');
+            topPipe.style.height = `${topPipeHeight}px`;
+            topPipe.style.left = `${pipeX}px`;
+            gameContainer.appendChild(topPipe);
+
+            // Tubería inferior
+            const bottomPipe = document.createElement('div');
+            bottomPipe.classList.add('pipe', 'bottom-pipe');
+            bottomPipe.style.height = `${bottomPipeHeight}px`;
+            bottomPipe.style.left = `${pipeX}px`;
+            gameContainer.appendChild(bottomPipe);
+
+            pipes.push({
+                element: topPipe,
+                x: pipeX,
+                topHeight: topPipeHeight,
+                bottomHeight: bottomPipeHeight,
+                passed: false // Para saber si ya se sumó el punto
+            });
+            pipes.push({
+                element: bottomPipe,
+                x: pipeX,
+                topHeight: topPipeHeight, // Almacena ambas alturas para la colisión
+                bottomHeight: bottomPipeHeight,
+                passed: false
+            });
+        }
+
+        function playerJump() {
+            if (gameRunning) {
+                playerVelocity = playerJumpStrength;
+            } else {
+                // Si el juego no está corriendo y se hace click/espacio, ¡iniciar!
+                startGame();
+            }
+        }
+
+        function endGame() {
+            gameRunning = false;
+            clearInterval(gameLoopId);
+            clearInterval(pipeSpawnId);
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+        // Eventos para saltar
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                playerJump();
+            }
+        });
+        document.addEventListener('mousedown', playerJump); // Click del ratón
+
+        // Iniciar el juego por primera vez al cargar
+        // startGame(); // Descomenta esto si quieres que empiece al cargar
+    </script>
+
+</body>
+</html>
